@@ -1,0 +1,106 @@
+<!--- Criar component --->
+
+<cfcomponent>
+	<cfset urlHml = 'http://homologacao.ademilar.net.br/n4a/NewconServicos'> 
+		 
+	   <cfset URLHMLATUAL  = urlHml>	
+	   <cfset URL_UTILIZAR  = urlHml>	
+
+	<!--- Criar Função --->
+
+	<cffunction name="cfcNewTeste" access="public" returntype="any" output="true">
+		<cfargument name="ID_COTA" type="any" default="0">
+			<cfoutput>
+				<cfsavecontent variable="xmlRequisicao">
+					<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/" xmlns:new="http://schemas.datacontract.org/2004/07/Newcon.Servicos.Atendimento">
+						<soapenv:Header/>
+						<soapenv:Body>
+							<tem:ConsultarDadosCota>
+								<!--Optional:-->
+								<tem:Request>
+								<!--Optional:-->
+								<new:idCota>#ID_COTA#</new:idCota>
+								</tem:Request>
+							</tem:ConsultarDadosCota>
+						</soapenv:Body>
+					</soapenv:Envelope>
+				</cfsavecontent>
+			</cfoutput>
+
+		<!--- Criar Query -------------------------------->
+		<cfset xmlPOST ="NAO DISPONIVEL">
+        <cfset v_status='*'>
+        <cfset ID_INS_LOG=0>
+        <cfset AMSSV304 = "Ademilar_cob">
+         
+        <cfquery name="Ins_Log" datasource="#AMSSV304#">
+            INSERT INTO TB_LOG_WS_Cobranca(
+               SERVICO,
+               CHAMADA_WS,
+               RETORNO_WS,
+               STATUS,
+               DT_OCORRENCIA,
+               nu_rs
+               )  
+            VALUES(
+               'NewCon_ConsultarCotasEmPagas',
+               '#xmlRequisicao#',
+               'xmlPOST',
+               '#V_STATUS#',
+               getdate(),
+               '#nurs#'
+               )
+            SELECT @@identity AS ID_LOG 
+        </cfquery>
+		 <!---------------------------------------------->
+	   
+         <!--- Enviar a requisição xml --->
+		<cfhttp  url="#url_utilizar#/Atendimento/Servicos/CotaService.svc"  method="post" result="httpResponse" >
+			<cfhttpparam type="header" name="SOAPAction" value="http://tempuri.org/ICotaService/ConsultarDadosCota" />
+			<cfhttpparam type="header" name="accept-encoding" value="no-compression" />
+			<cfhttpparam type="xml" value="#trim( "#xmlRequisicao#" )#" />
+		</cfhttp>
+		<cfset xmlPOST =  httpResponse.filecontent>
+
+		<cfif IsXML(xmlPOST)>
+			<cfset xmlDOM = XmlParse(xmlPOST)>           
+		<cfelse>
+			<cfset xmlDOM = "">
+		</cfif>
+
+		 <!--- LOG DA TRANSAÇÃO ---------------------------------------->
+        <cfif IsDefined("xmlDOM")>
+        	<cfset v_status='S'>
+            <cfset v_status='N'>
+        </cfif>
+
+        <cfif isdefined("Ins_Log") And #Ins_Log.ID_LOG# GT 0>
+            <cfquery name="Atualiza_Log"  datasource="#AMSSV304#">
+               UPDATE 
+                  TB_LOG_WS_Cobranca 
+               SET 
+                  RETORNO_WS='#xmlPOST#',
+                  STATUS='#v_status#'
+               WHERE 
+                  ID_LOG = #Ins_Log.ID_LOG#
+            </cfquery>
+        </cfif>
+		 <!------------------------------------------------------------->
+		 
+		 <!--- FIM DO LOG --->
+		<cfreturn xmlDOM.envelope.body>
+	</cffunction>
+</cfcomponent>
+
+
+
+
+
+
+
+
+
+
+
+
+
